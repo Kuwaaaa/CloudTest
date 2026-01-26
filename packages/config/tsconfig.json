@@ -1,0 +1,18 @@
+{
+  "extends": "@workspace/typescript-config/base.json", // 继承根目录或 workspace 的基础配置
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "declaration": true, // 必须为 true，这样其他包才能看到类型提示
+    "declarationMap": true // 可选，方便跳转定义
+  },
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

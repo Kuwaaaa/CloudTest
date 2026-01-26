@@ -4,7 +4,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev --turbopack  -H 0.0.0.0",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
@@ -12,12 +12,16 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@workspace/config": "workspace:^",
     "@workspace/ui": "workspace:*",
+    "larksr_websdk": "^3.3.115",
     "lucide-react": "^0.475.0",
     "next": "16.0.10",
     "next-themes": "^0.4.6",
+    "pxy_webcommonui": "^0.1.16",
     "react": "^19.2.1",
-    "react-dom": "^19.2.1"
+    "react-dom": "^19.2.1",
+    "sass": "^1.97.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",
