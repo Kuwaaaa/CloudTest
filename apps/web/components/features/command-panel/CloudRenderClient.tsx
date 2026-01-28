@@ -8,9 +8,8 @@ import { SmartCommandCard } from "@workspace/ui/components/SmartCommandCard"
 import { Button } from "@workspace/ui/components/button"
 import { ALL_COMMANDS, UserSavedCommand, CommandConfig, CommandService } from "@workspace/config"
 import { CreateCommandDialog } from "@/components/features/command-panel/CreateCommandDialog"
-import { PxyVideo } from "app/api/lark/LarkVideo"
-import CloudRenderPlayer from "@/app/api/lark/CloudRenderPlayer"
-import { log } from "console";
+import CloudRenderPlayer from "@/components/features/command-panel/CloudRenderPlayer"
+import { larkManager } from "@workspace/ui/lib/LarkManager"; // 导入单例
 
 // 定义 Props：接收服务端传来的初始数据
 interface Props {
@@ -39,6 +38,14 @@ export default function CloudRenderClient({ initialSavedCommands }: Props) {
         console.log('reconnected.');
 
     };
+
+    // 【修改点】
+    // 现在的 handleSendCommand 非常简单直接
+    const handleSendCommand = (json: any) => {
+        // 直接调用单例发送消息
+        larkManager.sendMessage(json);
+        console.log("🚀 发送指令:", json);
+    }
 
     useEffect(() => {
         // 1. 优先读取 URL 参数 ?server=...
@@ -82,9 +89,8 @@ export default function CloudRenderClient({ initialSavedCommands }: Props) {
         }
     }).filter(Boolean) as { id: string, config: CommandConfig }[]
 
-    const handleSendCommand = (json: any) => {
-        console.log("🚀 发送指令:", json)
-    }
+
+
 
     return (
         <div className="relative h-screen w-screen overflow-hidden bg-[#0a0a0a] font-sans">
@@ -98,9 +104,9 @@ export default function CloudRenderClient({ initialSavedCommands }: Props) {
                     key={playerKey}
                     serverAddress={signalingAddress}
                     authCode="44fc6e90895a46f49eb300014eca5d17"
-                    appliId="1443238700023545856"
+                    appliId="1465813628706881536"
                     onStateChange={(state, msg) => {
-                        setConnState(state);
+                        setConnState(state as ConnectionState); // 类型断言一下
                         if (msg) setErrorMsg(msg);
                     }}
                 />

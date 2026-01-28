@@ -28,10 +28,12 @@ export interface UserSavedCommand {
 // 2. 模拟数据 (Mock Data)
 // =====================
 const FAKE_SPIN_NODES = [
-  { value: "Target_A", label: "🏛️ 中心广场 (Target_A)" },
-  { value: "Target_B", label: "⛲ 喷泉雕像 (Target_B)" },
-  { value: "Target_C", label: "🚪 入口大门 (Target_C)" },
-  { value: "Camera_Pos_1", label: "🎥 监控机位 #1" },
+  { value: "spin_haiShangGuangFu", label: "🏛️ 海上光伏" },
+  { value: "spin_luShangFengDian", label: "⛲ 陆上风电" },
+  { value: "spin_qingNengGongChang", label: "🚪 氢能工厂" },
+  { value: "spin_keYanZhongXin", label: "🎥 科研中心" },
+  { value: "spin_haiShangFengDian", label: "🎥 海上风电" },
+  { value: "spin_haiShangFengDianPingTai", label: "🎥 海上风电平台" },
 ];
 
 // =====================

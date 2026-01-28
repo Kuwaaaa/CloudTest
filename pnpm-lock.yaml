@@ -164,12 +164,18 @@ importers:
       '@radix-ui/react-switch':
         specifier: ^1.2.6
         version: 1.2.6(@types/react-dom@19.1.7(@types/react@19.1.9))(@types/react@19.1.9)(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
+      '@workspace/config':
+        specifier: workspace:^
+        version: link:../config
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
+      larksr_websdk:
+        specifier: ^3.3.115
+        version: 3.3.115
       lucide-react:
         specifier: ^0.475.0
         version: 0.475.0(react@19.1.1)
