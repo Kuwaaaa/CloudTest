@@ -8,7 +8,13 @@ export type ParamSchemaType =
   | { type: "readonly"; label: string }
   | { type: "switch"; label: string; desc?: string }
   | { type: "slider"; label: string; min: number; max: number; step: number; unit?: string }
-  | { type: "select"; label: string; placeholder?: string; options: { value: string; label: string }[] };
+  | { 
+      type: "select"; 
+      label: string; 
+      placeholder?: string; 
+      // 关键修改：value 类型从 string 改为 any，允许存储数组、数字或字符串
+      options: { value: any; label: string }[] 
+    };
 
 export interface CommandConfig {
   name: string;
@@ -40,24 +46,22 @@ const FAKE_SPIN_NODES = [
 // 2. 模拟数据 (Mock Data - Updates)
 // =====================
 
-// 1. 坐标选项：用户看地名，系统传坐标
-// 格式: [经度, 纬度, 高度]
-// 高度设为 50000 (50km) 作为一个宏观视角的参考值
+// 1. 坐标选项：Value 直接就是 API 需要的数组格式
 const MOCK_AREA_POSITIONS = [
-  { value: "[116.4074, 39.9042, 50000]", label: "🚩 北京 (华北)" },
-  { value: "[121.4737, 31.2304, 50000]", label: "🏙️ 上海 (华东)" },
-  { value: "[113.2644, 23.1291, 50000]", label: "🌴 广州 (华南)" },
-  { value: "[104.0668, 30.5728, 60000]", label: "🐼 成都 (西南)" }, // 盆地地形，稍微拉高一点
-  { value: "[108.9398, 34.3416, 50000]", label: "🏺 西安 (西北)" },
-  { value: "[103.1533, 34.4677, 4000000]", label: "🇨🇳 中国全境 (鸟瞰)" }
+  { value: [116.4074, 39.9042, 50000], label: "🚩 北京 (华北)" },
+  { value: [121.4737, 31.2304, 50000], label: "🏙️ 上海 (华东)" },
+  { value: [113.2644, 23.1291, 50000], label: "🌴 广州 (华南)" },
+  { value: [104.0668, 30.5728, 60000], label: "🐼 成都 (西南)" },
+  { value: [108.9398, 34.3416, 50000], label: "🏺 西安 (西北)" },
+  { value: [103.153377, 34.467706, 3936390.29], label: "🇨🇳 中国全境 (鸟瞰)" }
 ];
 
-// 2. 颜色选项：用户看颜色名，系统传 RGB 数组
+// 2. 颜色选项：Value 直接就是 RGB 数组
 const MOCK_HIGHLIGHT_COLORS = [
-  { value: "[0.8, 0, 0]", label: "🔴 警示红" },
-  { value: "[0, 0.5, 1]", label: "🔵 科技蓝" },
-  { value: "[1, 0.8, 0]", label: "🟡 提醒金" },
-  { value: "[0, 0.8, 0.2]", label: "🟢 环保绿" }
+  { value: [0.8, 0, 0], label: "🔴 警示红" },
+  { value: [0, 0.5, 1], label: "🔵 科技蓝" },
+  { value: [1, 0.8, 0], label: "🟡 提醒金" },
+  { value: [0, 0.8, 0.2], label: "🟢 环保绿" }
 ];
 
 // 3. 对应的高亮节点名称 (如果有对应的 3D 资产 ID)
@@ -130,51 +134,62 @@ export const OTHER_COMMANDS: CommandConfig[] = [
 export const CAMERA_AREA_DATA: CommandConfig = {
   name: "camera.globalMoveToArea",
   title: "区域漫游定位",
-  // 这里设置默认值，也要符合 Schema 中的 value 格式 (字符串)
+  
+  // 这里的 defaultParams 必须是真实的 Object/Array，不能是字符串
   defaultParams: {
     callID: "123456",
-    targetWgsPosition: "[103.1533, 34.4677, 4000000]", // 默认全境
+    
+    // 直接使用数组
+    targetWgsPosition: [103.153377, 34.467706, 3936390.29], 
+    
     isHighlightMapInFinished: true,
     isHighlightMapLineInFinished: true,
-    highlightColor: "[0.8, 0, 0]", // 默认红色
+    
+    // 直接使用数组
+    highlightColor: [0.2, 0, 0], 
+    
     highlightDuration: 2,
     highlightScale: 1.5,
     highlightNodeName: "china",
     moveToDuration: 4,
     launchAltitude: 100,
-    targetWgsHPR: "[0, -90, 0]", // 默认垂直俯视
+    
+    // 直接使用数组
+    targetWgsHPR: [0.976531, -88.405223, 0.000059],    
+    
     updateTimeByCamera: true
   },
+  
   schema: {
     callID: { label: "Call ID", type: "readonly" },
 
-    // === 核心修改点：将坐标包装为选项 ===
+    // 【重点】targetWgsPosition
+    // 虽然 API 要的是数组，但通过 select 让用户选，选中的 value 就是那个数组
     targetWgsPosition: {
       label: "目标区域位置",
       type: "select",
-      options: MOCK_AREA_POSITIONS, // 关联上面定义的坐标 Mock 数据
+      options: MOCK_AREA_POSITIONS, 
       placeholder: "请选择要飞行的区域..."
     },
     
-    // 对应的高亮节点 ID
     highlightNodeName: {
       label: "对应高亮区块ID",
-      type: "select", // 这里也可以用 select 让用户选
+      type: "select",
       options: MOCK_AREA_NAMES,
       placeholder: "选择地图上的区块ID..."
     },
 
-    // 颜色选择
+    // 【重点】highlightColor
+    // 选中的 value 直接就是 [r, g, b] 数组
     highlightColor: {
       label: "高亮颜色",
       type: "select",
       options: MOCK_HIGHLIGHT_COLORS
     },
 
-    // 其他参数保持原有逻辑
     moveToDuration: { label: "飞行耗时", type: "slider", min: 1, max: 20, step: 0.5, unit: "s" },
     launchAltitude: { label: "终点高度偏移", type: "slider", min: 0, max: 1000, step: 10, unit: "m" },
-    
+
     // 姿态一般不需要用户频繁改，可以用 Text 或 Readonly，或者给几个预设
     targetWgsHPR: { 
       label: "相机姿态 [H,P,R]", 

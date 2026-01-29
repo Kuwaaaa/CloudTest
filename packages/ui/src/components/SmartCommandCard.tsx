@@ -51,28 +51,76 @@ function ParamConfigForm({ params, setParams, schema, onSend }: any) {
                                         <Label className="text-[10px] font-bold text-white/40 uppercase tracking-wider">
                                             {config.label}
                                         </Label>
-                                        <Select
-                                            value={String(value)}
-                                            onValueChange={(v) => updateValue(key, v)}
-                                        >
-                                            <SelectTrigger className="w-full h-8 text-xs bg-black/20 border-white/10 text-white focus:ring-1 focus:ring-white/30 focus:ring-offset-0">
-                                                <SelectValue placeholder={config.placeholder} />
-                                            </SelectTrigger>
-                                            <SelectContent
-                                                // 确保下拉菜单在深色背景下可见，并防止被 Popover 遮挡
-                                                className="bg-[#1a1a1a] border-white/10 text-white shadow-xl z-50"
-                                            >
-                                                {config.options?.map((opt: any) => (
-                                                    <SelectItem
-                                                        key={opt.value}
-                                                        value={opt.value}
-                                                        className="text-xs hover:bg-white/10 focus:bg-white/10 cursor-pointer"
-                                                    >
-                                                        {opt.label}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
+
+                                        {/* 预先计算当前选中的 Label */}
+                                        {(() => {
+                                            // 1. 获取当前的值（可能是数组，也可能是字符串）
+                                            const currentValue = value;
+
+                                            // 2. 将当前值序列化，用于查找
+                                            const currentStringified = typeof currentValue === 'object'
+                                                ? JSON.stringify(currentValue)
+                                                : String(currentValue);
+
+                                            // 3. 在 options 中查找匹配项
+                                            // 我们比较序列化后的结果，忽略对象引用的差异
+                                            const selectedOption = config.options?.find((opt: any) => {
+                                                const optStringified = typeof opt.value === 'object'
+                                                    ? JSON.stringify(opt.value)
+                                                    : String(opt.value);
+                                                return optStringified === currentStringified;
+                                            });
+
+                                            // 4. 拿到要显示的文字，如果找不到就显示 placeholder 或 原始值
+                                            const displayLabel = selectedOption ? selectedOption.label : (config.placeholder || String(value));
+
+                                            return (
+                                                <Select
+                                                    value={currentStringified}
+                                                    onValueChange={(v) => {
+                                                        try {
+                                                            const parsed = JSON.parse(v);
+                                                            // 稍微严谨一点的判断，确保解析出来的是原来的类型结构
+                                                            if (typeof parsed === 'object' && parsed !== null) {
+                                                                updateValue(key, parsed);
+                                                            } else {
+                                                                updateValue(key, v);
+                                                            }
+                                                        } catch (e) {
+                                                            updateValue(key, v);
+                                                        }
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="w-full h-8 text-xs bg-black/20 border-white/10 text-white focus:ring-1 focus:ring-white/30 focus:ring-offset-0">
+                                                        {/* 
+                           关键修改：
+                           不使用 <SelectValue /> 的自动回显机制。
+                           直接把我们算好的 displayLabel 渲染在这里。
+                           SelectValue 有时候在处理复杂类型 value 时会有 hydration 问题。
+                        */}
+                                                        <span className="truncate">{displayLabel}</span>
+                                                    </SelectTrigger>
+
+                                                    <SelectContent className="bg-[#1a1a1a] border-white/10 text-white shadow-xl z-50">
+                                                        {config.options?.map((opt: any) => {
+                                                            const itemValue = typeof opt.value === 'object'
+                                                                ? JSON.stringify(opt.value)
+                                                                : String(opt.value);
+
+                                                            return (
+                                                                <SelectItem
+                                                                    key={itemValue}
+                                                                    value={itemValue}
+                                                                    className="text-xs hover:bg-white/10 focus:bg-white/10 cursor-pointer"
+                                                                >
+                                                                    {opt.label}
+                                                                </SelectItem>
+                                                            )
+                                                        })}
+                                                    </SelectContent>
+                                                </Select>
+                                            );
+                                        })()}
                                     </div>
                                 )}
 
