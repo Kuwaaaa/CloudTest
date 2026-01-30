@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Settings2, Terminal } from "lucide-react"
+import { Settings2, Terminal, ChevronDown, ChevronUp, GripHorizontal } from "lucide-react"
 import { useSearchParams } from "next/navigation";
 import { Loader2, AlertCircle, RefreshCw, WifiOff } from "lucide-react" // 引入图标
 import { SmartCommandCard } from "@workspace/ui/components/SmartCommandCard"
@@ -32,6 +32,9 @@ export default function CloudRenderClient({ initialSavedCommands }: Props) {
 
     // 处理重试逻辑（简单的刷新页面，或者通过 key 强制重新挂载组件）
     const [playerKey, setPlayerKey] = useState(0);
+    const [isPanelVisible, setIsPanelVisible] = useState(true);
+
+
     const handleRetry = () => {
         setConnState('idle');
         setPlayerKey(prev => prev + 1); // 改变 key 会强制销毁并重新创建 Player 组件
@@ -64,6 +67,7 @@ export default function CloudRenderClient({ initialSavedCommands }: Props) {
         } else {
             setSignalingAddress("http://123.60.85.133:8181");
         }
+        setSignalingAddress("http://123.60.85.133:8181");
     }, [searchParams]);
 
     if (!signalingAddress) return null;
@@ -172,26 +176,95 @@ export default function CloudRenderClient({ initialSavedCommands }: Props) {
                     <Terminal className="w-5 h-5 text-white/60" />
                 </div>
             </div>
-            {/* 底部控制栏 */}
-            <div className="absolute bottom-0 w-full z-20">
-                <div className="absolute bottom-0 w-full h-64 bg-gradient-to-t from-black via-black/80 to-transparent pointer-events-none" />
-                <div className="relative p-6 md:p-10">
-                    {/* ... 标题 ... */}
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                        {/* 预设指令 */}
-                        {ALL_COMMANDS.map((cmd, index) => (
-                            <SmartCommandCard key={`preset-${index}`} data={cmd} sendCommand={handleSendCommand} />
-                        ))}
+            {/* --- 底部控制栏 (添加抽屉效果) --- */}
+            {/* 
+                原理：
+                1. 使用 absolute bottom-0 固定在底部
+                2. transition-transform 负责动画
+                3. 根据 isPanelVisible 切换 translate-y
+                4. translate-y-full 会完全移出屏幕，所以我们用 translate-y-[100%] 但实际上我们把 Toggle 按钮放在了负 margin 上
+            */}
+            <div
+                className={`
+                    absolute bottom-0 w-full z-20 
+                    transition-transform duration-500 cubic-bezier(0.4, 0, 0.2, 1)
+                    ${isPanelVisible ? "translate-y-0" : "translate-y-full"}
+                `}
+            >
+                {/* 
+                   === 核心新增：控制手柄 (Toggle Handle) === 
+                   绝对定位到父容器的顶部外侧 (-top-8)，这样当父容器缩下去时，
+                   这个按钮刚好停在屏幕最底部。
+                */}
+                <div className="absolute -top-10 w-full flex justify-center pointer-events-none">
+                    <button
+                        onClick={() => setIsPanelVisible(!isPanelVisible)}
+                        className="
+                            pointer-events-auto
+                            flex items-center justify-center gap-2
+                            h-10 px-8 
+                            bg-black/80 backdrop-blur-xl
+                            border-t border-x border-white/10
+                            rounded-t-xl
+                            text-white/70 hover:text-white hover:bg-primary/80
+                            shadow-[0_-5px_15px_rgba(0,0,0,0.3)]
+                            transition-all duration-300
+                            group
+                        "
+                    >
+                        {isPanelVisible ? (
+                            <>
+                                <span className="text-[10px] font-bold tracking-widest opacity-0 group-hover:opacity-100 transition-opacity -ml-4 translate-x-2 group-hover:translate-x-0">
+                                    HIDE
+                                </span>
+                                <ChevronDown className="w-5 h-5 animate-bounce-slow" />
+                            </>
+                        ) : (
+                            <>
+                                <ChevronUp className="w-5 h-5 -translate-y-0.5" />
+                                <span className="text-[10px] font-bold tracking-widest">
+                                    CONTROLS
+                                </span>
+                            </>
+                        )}
+                    </button>
+                </div>
 
-                        {/* 自定义指令 */}
-                        {userCommandCards.map((item) => (
-                            <SmartCommandCard key={item.id} data={item.config} sendCommand={handleSendCommand} />
-                        ))}
+                {/* 
+                    内容容器 
+                    注意：移除了原本的 'h-64' 固定高度渐变，改为自适应高度的内容包裹，
+                    并添加了实体的背景色，防止收起后还能透过看到地图。
+                */}
+                <div className="relative w-full bg-[#0a0a0a]/90 backdrop-blur-xl border-t border-white/10 pb-6 pt-2">
+                    {/* 装饰性光效 */}
+                    <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent" />
 
-                        {/* 新建按钮：添加成功后调用 refreshCommands */}
-                        <CreateCommandDialog onCreated={refreshCommands} />
+                    <div className="relative px-6 md:px-10 py-6">
+                        {/* 标题栏 (可选) */}
+                        {/* <div className="mb-4 flex items-center justify-between text-white/40 text-xs font-mono uppercase tracking-wider">
+                            <span>Command Center</span>
+                            <span>v2.0</span>
+                        </div> */}
+
+                        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                            {/* 预设指令 */}
+                            {ALL_COMMANDS.map((cmd, index) => (
+                                <SmartCommandCard key={`preset-${index}`} data={cmd} sendCommand={handleSendCommand} />
+                            ))}
+
+                            {/* 自定义指令 */}
+                            {userCommandCards.map((item) => (
+                                <SmartCommandCard key={item.id} data={item.config} sendCommand={handleSendCommand} />
+                            ))}
+
+                            {/* 新建按钮 */}
+                            <CreateCommandDialog onCreated={refreshCommands} />
+                        </div>
                     </div>
+
+                    {/* 底部安全区 (防止 iPhone 底部横条遮挡) */}
+                    <div className="h-4 w-full" />
                 </div>
             </div>
         </div>
