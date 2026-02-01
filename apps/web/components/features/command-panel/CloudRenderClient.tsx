@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Settings2, Terminal, ChevronDown, ChevronUp, GripHorizontal } from "lucide-react"
 import { useSearchParams } from "next/navigation";
 import { Loader2, AlertCircle, RefreshCw, WifiOff } from "lucide-react" // 引入图标
@@ -8,8 +8,12 @@ import { SmartCommandCard } from "@workspace/ui/components/SmartCommandCard"
 import { Button } from "@workspace/ui/components/button"
 import { ALL_COMMANDS, UserSavedCommand, CommandConfig, CommandService } from "@workspace/config"
 import { CreateCommandDialog } from "@/components/features/command-panel/CreateCommandDialog"
-import CloudRenderPlayer from "@/components/features/command-panel/CloudRenderPlayer"
+import { RTCConnectionState } from "@workspace/ui/lib/Go2RTCClient"; // 引入类型
 import { larkManager } from "@workspace/ui/lib/LarkManager"; // 导入单例
+
+import Go2RTCPlayer from "@workspace/ui/components/Go2RTCPlayer"
+
+import { ControlClient } from "@workspace/ui/lib/ControlClient"
 
 // 定义 Props：接收服务端传来的初始数据
 interface Props {
@@ -24,7 +28,7 @@ export default function CloudRenderClient({ initialSavedCommands }: Props) {
     const [savedCommands, setSavedCommands] = useState<UserSavedCommand[]>(initialSavedCommands)
 
     // 新增：连接状态管理
-    const [connState, setConnState] = useState<ConnectionState>('idle');
+    const [connState, setConnState] = useState<RTCConnectionState>('idle');
     const [errorMsg, setErrorMsg] = useState("");
 
     const searchParams = useSearchParams();
@@ -34,6 +38,36 @@ export default function CloudRenderClient({ initialSavedCommands }: Props) {
     const [playerKey, setPlayerKey] = useState(0);
     const [isPanelVisible, setIsPanelVisible] = useState(true);
 
+    // 1. 使用 ref 持有 WebSocket 客户端实例
+    const controlRef = useRef<ControlClient | null>(null);
+
+    // 2. 初始化连接
+    useEffect(() => {
+        // 生产环境地址 (VPS Nginx)
+        const wsUrl = "ws://123.60.85.133/control/";
+        // 本地调试地址 (如果你还在本地跑)
+        // const wsUrl = "ws://127.0.0.1:8888/";
+
+        const client = new ControlClient(wsUrl);
+        client.connect();
+        controlRef.current = client;
+
+        return () => {
+            client.disconnect();
+        };
+    }, []);
+
+    // 3. 【核心】这就是你要传下去的函数
+    const handleSendCommand = (json: any) => {
+        console.log("🚀 发送指令:", json);
+        controlRef.current?.send(json);
+    };
+
+
+    // Go2RTC 默认 API 端口 1984
+    // 协议是 ws，路径是 /api/ws，参数 src=你的流名称(p_cg)
+    // const streamUrl = "ws://127.0.0.1:1984/api/ws?src=p_cg";
+    const streamUrl = "http://127.0.0.1:1984/api/webrtc?src=p_cg";
 
     const handleRetry = () => {
         setConnState('idle');
@@ -42,42 +76,25 @@ export default function CloudRenderClient({ initialSavedCommands }: Props) {
 
     };
 
-    // 【修改点】
-    // 现在的 handleSendCommand 非常简单直接
-    const handleSendCommand = (json: any) => {
-        // 直接调用单例发送消息
-        larkManager.sendMessage(json);
-        console.log("🚀 发送指令:", json);
-    }
-
-    useEffect(() => {
-        // 1. 优先读取 URL 参数 ?server=...
-        // 例如访问: http://123.60.85.133/?server=http://10.126.126.3:8181/
-        const queryServer = searchParams.get("server");
-
-        if (queryServer) {
-            setSignalingAddress(queryServer);
-            return;
-        }
-
-        // 2. 其次自动判断
-        const hostname = window.location.hostname;
-        if (hostname === "localhost" || hostname === "127.0.0.1") {
-            setSignalingAddress("http://localhost:8181/");
-        } else {
-            setSignalingAddress("http://123.60.85.133:8181");
-        }
-        setSignalingAddress("http://123.60.85.133:8181");
-    }, [searchParams]);
-
-    if (!signalingAddress) return null;
-
+    // // 【修改点】
+    // // 现在的 handleSendCommand 非常简单直接
+    // const handleSendCommand = (json: any) => {
+    //     // 直接调用单例发送消息
+    //     larkManager.sendMessage(json);
+    //     console.log("🚀 发送指令:", json);
+    // }
 
     // 2. 依然保留 fetch，用于“添加按钮后”的手动刷新
     const refreshCommands = async () => {
         const data = await CommandService.list()
         setSavedCommands(data)
     }
+
+    // 2. 处理状态回调
+    const handleStateChange = (state: RTCConnectionState, msg?: string) => {
+        setConnState(state);
+        if (msg) setErrorMsg(msg);
+    };
 
     // 3. 数据合并逻辑 (不变)
     const userCommandCards = savedCommands.map(saved => {
@@ -93,9 +110,6 @@ export default function CloudRenderClient({ initialSavedCommands }: Props) {
         }
     }).filter(Boolean) as { id: string, config: CommandConfig }[]
 
-
-
-
     return (
         <div className="relative h-screen w-screen overflow-hidden bg-[#0a0a0a] font-sans">
 
@@ -104,61 +118,40 @@ export default function CloudRenderClient({ initialSavedCommands }: Props) {
 
                 {/* 1. 播放器组件 (始终存在，但可能被遮挡) */}
                 {/* 使用 key 属性来实现重试功能 */}
-                <CloudRenderPlayer
-                    key={playerKey}
-                    serverAddress={signalingAddress}
-                    authCode="44fc6e90895a46f49eb300014eca5d17"
-                    appliId="1465813628706881536"
-                    onStateChange={(state, msg) => {
-                        setConnState(state as ConnectionState); // 类型断言一下
-                        if (msg) setErrorMsg(msg);
-                    }}
-                />
+                <div className="w-[800px] h-[600px] border border-gray-500">
+                    <Go2RTCPlayer streamName='p_cg' onStateChange={handleStateChange} />
+                </div>
 
                 {/* 2. 状态遮罩层 (根据状态显示) */}
+                {/* --- 遮罩层 (逻辑保持在你原来的 CloudRenderClient 里) --- */}
                 {connState !== 'connected' && (
-                    <div className="absolute inset-0 z-10 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center text-white space-y-6 animate-in fade-in duration-500">
+                    <div className="absolute inset-0 z-10 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center text-white animate-in fade-in">
 
-                        {/* 状态：连接中 */}
+                        {/* Connecting UI */}
                         {(connState === 'idle' || connState === 'connecting') && (
-                            <>
-                                <div className="relative">
-                                    <div className="w-16 h-16 border-4 border-white/10 border-t-primary rounded-full animate-spin"></div>
-                                    <div className="absolute inset-0 flex items-center justify-center">
-                                        <Loader2 className="w-6 h-6 text-primary animate-pulse" />
-                                    </div>
-                                </div>
-                                <div className="text-center space-y-1">
-                                    <h3 className="text-xl font-medium tracking-wide">正在连接云渲染服务</h3>
-                                    <p className="text-sm text-white/40 font-mono">ESTABLISHING SECURE CHANNEL...</p>
-                                </div>
-                            </>
+                            <div className="flex flex-col items-center gap-4">
+                                <div className="w-12 h-12 border-4 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+                                <p className="font-mono text-sm tracking-widest text-blue-200">
+                                    CONNECTING TO RENDER SERVER...
+                                </p>
+                            </div>
                         )}
 
-                        {/* 状态：失败 */}
+                        {/* Error UI */}
                         {connState === 'error' && (
-                            <>
-                                <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center border border-red-500/20">
-                                    <WifiOff className="w-10 h-10 text-red-500" />
-                                </div>
-                                <div className="text-center max-w-md px-6">
-                                    <h3 className="text-xl font-medium text-red-400 mb-2">连接失败</h3>
-                                    <div className="bg-red-950/30 border border-red-900/50 rounded p-3 mb-6">
-                                        <p className="text-xs text-red-200/70 font-mono break-all">
-                                            {errorMsg || "Connection timed out or refused."}
-                                        </p>
-                                    </div>
-
-                                    <Button
-                                        onClick={handleRetry}
-                                        variant="outline"
-                                        className="border-white/10 hover:bg-white/10 hover:text-white gap-2"
-                                    >
-                                        <RefreshCw className="w-4 h-4" />
-                                        尝试重新连接
-                                    </Button>
-                                </div>
-                            </>
+                            <div className="flex flex-col items-center gap-4">
+                                <div className="text-red-500 text-5xl">⚠</div>
+                                <h3 className="text-xl font-bold">Connection Failed</h3>
+                                <p className="text-red-300/70 font-mono bg-red-950/50 px-4 py-2 rounded">
+                                    {errorMsg}
+                                </p>
+                                <button
+                                    onClick={() => window.location.reload()}
+                                    className="px-6 py-2 bg-white/10 hover:bg-white/20 rounded transition"
+                                >
+                                    Retry Connection
+                                </button>
+                            </div>
                         )}
                     </div>
                 )}
