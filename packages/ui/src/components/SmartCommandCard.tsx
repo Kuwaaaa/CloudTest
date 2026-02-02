@@ -101,7 +101,12 @@ function ParamConfigForm({ params, setParams, schema, onSend }: any) {
                                                         <span className="truncate">{displayLabel}</span>
                                                     </SelectTrigger>
 
-                                                    <SelectContent className="bg-[#1a1a1a] border-white/10 text-white shadow-xl z-50">
+                                                    <SelectContent className="z-[9999] bg-[#1a1a1a] border-white/10 text-white"
+                                                        // 1. 强制将 z-index 设得极高
+                                                        // 2. 如果 SelectContent 也是 Portal 渲染的，Radix 会自动处理 Focus
+                                                        // 3. 重要的是防止点击事件被外层 Popover 吞掉
+                                                        position="popper"
+                                                        sideOffset={5}>
                                                         {config.options?.map((opt: any) => {
                                                             const itemValue = typeof opt.value === 'object'
                                                                 ? JSON.stringify(opt.value)
@@ -225,7 +230,7 @@ function SmartCommandCard({ data, sendCommand }: SmartCommandCardProps) {
     }
 
     return (
-        <Popover open={open} onOpenChange={setOpen}>
+        <Popover open={open} onOpenChange={setOpen} >
             <div className="relative group w-full h-full select-none">
                 <Button
                     variant="outline"
