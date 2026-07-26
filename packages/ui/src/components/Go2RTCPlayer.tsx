@@ -1,68 +1,72 @@
 "use client"
-import React, { useEffect, useRef } from 'react';
-import { Go2RTCClient, RTCConnectionState } from '../lib/Go2RTCClient';
+
+import React, { useEffect, useRef } from "react";
+
+import { buildWebrtcStreamUrl, DEFAULT_RUNTIME_CONFIG, parseIceServers } from "@workspace/config";
+
+import { Go2RTCClient, RTCConnectionState, type WebRTCStatsSnapshot } from "../lib/Go2RTCClient";
 
 interface Props {
-    streamName: string;
-    onStateChange?: (state: RTCConnectionState, msg?: string) => void;
+  streamName: string;
+  webrtcBaseUrl?: string;
+  iceServers?: string;
+  onStateChange?: (state: RTCConnectionState, msg?: string) => void;
+  onStats?: (stats: WebRTCStatsSnapshot) => void;
 }
 
-export default function Go2RTCPlayer({ streamName, onStateChange }: Props) {
-    const videoRef = useRef<HTMLVideoElement>(null);
-    const clientRef = useRef<Go2RTCClient | null>(null);
+export default function Go2RTCPlayer({
+  streamName,
+  webrtcBaseUrl = DEFAULT_RUNTIME_CONFIG.webrtcBaseUrl,
+  iceServers = DEFAULT_RUNTIME_CONFIG.iceServers,
+  onStateChange,
+  onStats,
+}: Props) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const clientRef = useRef<Go2RTCClient | null>(null);
+  const callbackRef = useRef(onStateChange);
+  const statsCallbackRef = useRef(onStats);
 
-    // 【关键修改 1】使用 useRef 保存回调函数
-    // 这样无论父组件怎么重渲染，callbackRef 都是稳定的，不会触发 useEffect
-    const callbackRef = useRef(onStateChange);
+  useEffect(() => {
+    callbackRef.current = onStateChange;
+    statsCallbackRef.current = onStats;
+  });
 
-    // 每次渲染都更新 ref 的值
-    useEffect(() => {
-        callbackRef.current = onStateChange;
-    });
+  useEffect(() => {
+    if (!videoRef.current) return;
 
-    useEffect(() => {
-        if (!videoRef.current) return;
+    if (clientRef.current) {
+      clientRef.current.disconnect();
+    }
 
-        // 1. 先清理之前的（如果有）
-        if (clientRef.current) {
-            clientRef.current.disconnect();
-        }
+    const client = new Go2RTCClient(videoRef.current);
+    clientRef.current = client;
 
-        const client = new Go2RTCClient(videoRef.current);
-        clientRef.current = client;
+    client.onStateChange = (state, msg) => {
+      callbackRef.current?.(state, msg);
+    };
+    client.onStats = (stats) => {
+      statsCallbackRef.current?.(stats);
+    };
 
-        client.onStateChange = (state, msg) => {
-            // 【关键修改 2】通过 ref 调用，打破依赖闭环
-            if (callbackRef.current) {
-                callbackRef.current(state, msg);
-            }
-        };
+    const streamUrl = buildWebrtcStreamUrl(webrtcBaseUrl, streamName);
+    client.connect(streamUrl, { iceServers: parseIceServers(iceServers) });
 
-        // const streamUrl = `http://127.0.0.1:1984/api/webrtc?src=${streamName}`;
-        const streamUrl = `http://123.60.85.133/api/webrtc?src=${streamName}`;
-        console.log("[Player] Init Connection to:", streamName);
+    return () => {
+      client.disconnect();
+    };
+  }, [streamName, webrtcBaseUrl, iceServers]);
 
-        client.connect(streamUrl);
-
-        return () => {
-            client.disconnect();
-        };
-
-        // 【关键修改 3】依赖数组里只留 streamName
-        // 绝对不要把 onStateChange 放进来！
-    }, [streamName]);
-
-    return (
-        <div className="w-full h-full bg-black flex items-center justify-center">
-            <video
-                ref={videoRef}
-                className="w-full h-full object-contain"
-                autoPlay
-                playsInline
-                muted
-                controls={false}
-                style={{ pointerEvents: 'none' }}
-            />
-        </div>
-    );
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-black">
+      <video
+        ref={videoRef}
+        className="h-full w-full object-contain"
+        autoPlay
+        playsInline
+        muted
+        controls={false}
+        style={{ pointerEvents: "none" }}
+      />
+    </div>
+  );
 }

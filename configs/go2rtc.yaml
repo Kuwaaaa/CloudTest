@@ -1,0 +1,20 @@
+log:
+  level: debug
+  api: debug
+  exec: debug
+  rtsp: debug
+
+api:
+  listen: ":1984"
+  origin: "*"
+
+rtsp:
+  listen: ":8554"
+
+webrtc:
+  listen: ":8555"
+  candidates:
+    - 123.60.85.133:8555
+
+streams:
+  p_cg: exec:ffmpeg -f lavfi -i ddagrab=0:framerate=30:video_size=1920x1080 -c:v h264_nvenc -preset p1 -zerolatency 1 -rc cbr_ld_hq -g 30 -b:v 13M -maxrate 13M -bufsize 13M -rtsp_transport tcp -f rtsp {output}

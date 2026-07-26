@@ -1,109 +1,199 @@
-// packages/ui/src/lib/Go2RTCClient.ts
+export type RTCConnectionState = "idle" | "connecting" | "connected" | "error";
 
-// 定义状态类型，与组件保持一致
-export type RTCConnectionState = 'idle' | 'connecting' | 'connected' | 'error';
+export interface Go2RTCConnectOptions {
+  iceServers?: RTCIceServer[];
+  statsIntervalMs?: number;
+}
+
+export interface WebRTCStatsSnapshot {
+  timestamp: number;
+  bitrateMbps: number;
+  framesPerSecond: number;
+  framesDropped: number;
+  packetsLost: number;
+  packetsReceived: number;
+  jitterMs: number;
+  roundTripTimeMs: number;
+  candidateType: string;
+  localCandidateType: string;
+  remoteCandidateType: string;
+}
+
+const EMPTY_STATS: WebRTCStatsSnapshot = {
+  timestamp: 0,
+  bitrateMbps: 0,
+  framesPerSecond: 0,
+  framesDropped: 0,
+  packetsLost: 0,
+  packetsReceived: 0,
+  jitterMs: 0,
+  roundTripTimeMs: 0,
+  candidateType: "unknown",
+  localCandidateType: "unknown",
+  remoteCandidateType: "unknown",
+};
 
 export class Go2RTCClient {
   private pc: RTCPeerConnection | null = null;
   private videoElement: HTMLVideoElement;
-  public onStateChange: ((state: RTCConnectionState, errorMsg?: string) => void) | null = null;
-  
-  // 【新增】增加一个标志位，标记是否已销毁
   private isDestroyed = false;
+  private connectionId = 0;
+  private abortController: AbortController | null = null;
+  private statsTimer: ReturnType<typeof setInterval> | null = null;
+  private lastBytesReceived = 0;
+  private lastStatsTimestamp = 0;
+
+  public onStateChange: ((state: RTCConnectionState, errorMsg?: string) => void) | null = null;
+  public onStats: ((stats: WebRTCStatsSnapshot) => void) | null = null;
 
   constructor(videoElement: HTMLVideoElement) {
     this.videoElement = videoElement;
   }
 
-  public async connect(streamUrl: string) {
-    // 重置标志位
+  public async connect(streamUrl: string, options: Go2RTCConnectOptions = {}) {
+    this.disconnect(false);
+
     this.isDestroyed = false;
-    
+    const activeConnectionId = ++this.connectionId;
+    const abortController = new AbortController();
+    this.abortController = abortController;
+
     try {
-      this.notifyState('connecting');
-      console.log(`[Go2RTC] HTTP Connecting...`);
+      this.notifyState("connecting");
 
       const pc = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
+        iceServers: options.iceServers ?? [],
       });
       this.pc = pc;
 
-      // ... 绑定 ontrack, onconnectionstatechange 等事件保持不变 ...
-       // 这里的 iceConnectionState 也很重要，有时候 connectionState 还没变，ICE 已经通了
+      const isActive = () => !this.isDestroyed && this.connectionId === activeConnectionId && this.pc === pc;
+
       pc.oniceconnectionstatechange = () => {
-          if(pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-              this.notifyState('connected');
-          }
+        if (!isActive()) return;
+        if (pc.iceConnectionState === "connected" || pc.iceConnectionState === "completed") {
+          this.notifyState("connected");
+        }
       };
 
-        pc.ontrack = (event) => {
-        console.log("[Go2RTC] Received Track");
-        // 收到流了，再次确认为 connected
-        this.notifyState('connected');
-        
+      pc.ontrack = (event) => {
+        if (!isActive()) return;
+        this.notifyState("connected");
+
         const stream = event.streams[0] || new MediaStream([event.track]);
         if (this.videoElement.srcObject !== stream) {
           this.videoElement.srcObject = stream;
-          // 尝试播放，如果失败可能需要用户交互
-          this.videoElement.play().catch(e => {
-              console.error("AutoPlay blocked:", e);
-              // 这里不报 error，因为连接其实是成功的，只是没自动播放
+          this.videoElement.play().catch((error) => {
+            console.error("AutoPlay blocked:", error);
           });
         }
       };
-      
+
       pc.addTransceiver("video", { direction: "recvonly" });
 
       const offer = await pc.createOffer();
-      
-      // 【检查点 1】如果在创建 Offer 期间被销毁了，直接退出
-      if (this.isDestroyed) return;
-      
+      if (!isActive()) return;
+
       await pc.setLocalDescription(offer);
 
       const response = await fetch(streamUrl, {
         method: "POST",
-        body: offer.sdp, 
+        body: offer.sdp,
+        signal: abortController.signal,
       });
 
-      // 【检查点 2】如果在网络请求期间被销毁了，直接退出，不要继续操作 pc
-      if (this.isDestroyed) return;
-
+      if (!isActive()) return;
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const answerSdp = await response.text();
-      
-      // 【检查点 3】最后一道防线
-      if (this.isDestroyed || pc.signalingState === 'closed') return;
+      if (!isActive() || pc.signalingState === "closed") return;
 
       await pc.setRemoteDescription({
         type: "answer",
         sdp: answerSdp,
       });
-      
-    } catch (e: any) {
-      // 如果是因为销毁导致的报错，忽略它，不报 Error
-      if (this.isDestroyed) return;
 
-      console.error("[Go2RTC] Connect Failed:", e);
-      this.notifyState('error', e.message);
+      this.startStatsLoop(pc, activeConnectionId, options.statsIntervalMs ?? 1500);
+    } catch (error) {
+      if (this.isDestroyed || abortController.signal.aborted) return;
+      console.error("[Go2RTC] Connect Failed:", error);
+      this.notifyState("error", error instanceof Error ? error.message : "Connection failed");
     }
   }
 
-  public disconnect() {
-    // 【关键】标记为已销毁
+  public disconnect(notify = true) {
     this.isDestroyed = true;
-
+    this.connectionId += 1;
+    this.abortController?.abort();
+    this.abortController = null;
+    this.stopStatsLoop();
     this.pc?.close();
     this.pc = null;
     this.videoElement.srcObject = null;
-    this.notifyState('idle');
+
+    if (notify) this.notifyState("idle");
   }
-  
-  // 辅助方法
-  private notifyState(state: RTCConnectionState, msg?: string) {
-      if (this.onStateChange) {
-          this.onStateChange(state, msg);
+
+  private startStatsLoop(pc: RTCPeerConnection, connectionId: number, intervalMs: number) {
+    this.stopStatsLoop();
+    this.lastBytesReceived = 0;
+    this.lastStatsTimestamp = 0;
+
+    this.statsTimer = setInterval(() => {
+      void this.collectStats(pc, connectionId);
+    }, intervalMs);
+  }
+
+  private stopStatsLoop() {
+    if (this.statsTimer) clearInterval(this.statsTimer);
+    this.statsTimer = null;
+  }
+
+  private async collectStats(pc: RTCPeerConnection, connectionId: number) {
+    if (this.isDestroyed || this.connectionId !== connectionId || this.pc !== pc) return;
+
+    const report = await pc.getStats();
+    const snapshot = { ...EMPTY_STATS, timestamp: Date.now() };
+    let activeCandidatePair: RTCStats | undefined;
+
+    report.forEach((stats) => {
+      const entry = stats as RTCStats & Record<string, any>;
+
+      if (entry.type === "inbound-rtp" && entry.kind === "video") {
+        const elapsedSeconds = this.lastStatsTimestamp
+          ? Math.max((entry.timestamp - this.lastStatsTimestamp) / 1000, 0.001)
+          : 0;
+        const byteDelta = this.lastBytesReceived ? Math.max((entry.bytesReceived ?? 0) - this.lastBytesReceived, 0) : 0;
+
+        snapshot.bitrateMbps = elapsedSeconds ? (byteDelta * 8) / elapsedSeconds / 1_000_000 : 0;
+        snapshot.framesPerSecond = Number(entry.framesPerSecond ?? 0);
+        snapshot.framesDropped = Number(entry.framesDropped ?? 0);
+        snapshot.packetsLost = Number(entry.packetsLost ?? 0);
+        snapshot.packetsReceived = Number(entry.packetsReceived ?? 0);
+        snapshot.jitterMs = Number(entry.jitter ?? 0) * 1000;
+
+        this.lastBytesReceived = Number(entry.bytesReceived ?? 0);
+        this.lastStatsTimestamp = Number(entry.timestamp ?? 0);
       }
+
+      if (entry.type === "candidate-pair" && (entry.nominated || entry.state === "succeeded") && entry.currentRoundTripTime !== undefined) {
+        activeCandidatePair = entry;
+        snapshot.roundTripTimeMs = Number(entry.currentRoundTripTime ?? 0) * 1000;
+      }
+    });
+
+    if (activeCandidatePair) {
+      const pair = activeCandidatePair as RTCStats & Record<string, any>;
+      const local = report.get(pair.localCandidateId) as (RTCStats & Record<string, any>) | undefined;
+      const remote = report.get(pair.remoteCandidateId) as (RTCStats & Record<string, any>) | undefined;
+      snapshot.localCandidateType = String(local?.candidateType ?? "unknown");
+      snapshot.remoteCandidateType = String(remote?.candidateType ?? "unknown");
+      snapshot.candidateType = `${snapshot.localCandidateType}/${snapshot.remoteCandidateType}`;
+    }
+
+    this.onStats?.(snapshot);
+  }
+
+  private notifyState(state: RTCConnectionState, msg?: string) {
+    this.onStateChange?.(state, msg);
   }
 }

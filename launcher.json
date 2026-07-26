@@ -1,0 +1,15 @@
+{
+    "error":  "Config file not found",
+    "exePath":  "E:\\zorro\\1.3\\bin\\app__x64.exe",
+    "startArgs":  "",
+    "processName":  "app__x64.exe",
+    "controlWsUrl":  "ws://127.0.0.1:8888/",
+    "webrtcBaseUrl":  "http://127.0.0.1:1984",
+    "easytierEndpoint":  "",
+    "go2rtcCandidate":  "127.0.0.1:8555",
+    "transportMode":  "relay",
+    "videoBitrateMbps":  13,
+    "videoFps":  30,
+    "videoResolution":  "1920x1080",
+    "iceServers":  ""
+}

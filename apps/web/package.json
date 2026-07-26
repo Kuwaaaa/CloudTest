@@ -14,6 +14,7 @@
   "dependencies": {
     "@workspace/config": "workspace:^",
     "@workspace/ui": "workspace:*",
+    "clsx": "^2.1.1",
     "larksr_websdk": "^3.3.115",
     "lucide-react": "^0.475.0",
     "next": "16.0.10",
@@ -21,7 +22,8 @@
     "pxy_webcommonui": "^0.1.16",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
-    "sass": "^1.97.3"
+    "sass": "^1.97.3",
+    "tailwind-merge": "^3.3.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",

@@ -21,8 +21,7 @@
     "next.config.ts",
     "**/*.ts",
     "**/*.tsx",
-    ".next/types/**/*.ts",
-    "app/api/lark/LarkVideo.jsx"
+    ".next/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

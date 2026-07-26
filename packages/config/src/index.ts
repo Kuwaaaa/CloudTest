@@ -85,10 +85,10 @@ export const CAMERA_MOVE_DATA: CommandConfig = {
   defaultParams: {
     callID: "123456",
     spinNodeName: "spin_haiShangGuangFu",
-    moveToDuration: 4,
+    moveToDuration: 5,
     launchAltitude: 100,
     spinDistance: 100,
-    spinSpeed: 1,
+    spinSpeed: 0.1,
     updateTimeByCamera: true,
     orbitAngle: 45
   },
@@ -212,18 +212,20 @@ export const CAMERA_AREA_DATA: CommandConfig = {
 export const ALL_COMMANDS = [CAMERA_MOVE_DATA, CAMERA_AREA_DATA, ...OTHER_COMMANDS];
 
 // 1. 定义一个变量来存 Base URL
-let _apiBaseUrl = "http://127.0.0.1:3000";
+let _apiBaseUrl = "";
 
 // 2. 提供一个配置函数，让外部 App 调用
 export const setApiBaseUrl = (url: string) => {
-  _apiBaseUrl = url;
+  _apiBaseUrl = url.replace(/\/+$/, "");
 };
+
+const apiUrl = (path: string) => `${_apiBaseUrl}${path}`;
 
 export const CommandService = {
     // 获取列表
     async list(): Promise<UserSavedCommand[]> {
         try {
-            const res = await fetch(`${_apiBaseUrl}/api/commands`);
+            const res = await fetch(apiUrl("/api/commands"));
             if (!res.ok) throw new Error("Network response was not ok");
             return await res.json();
         } catch (error) {
@@ -235,7 +237,7 @@ export const CommandService = {
     // 保存
     async create(command: UserSavedCommand): Promise<boolean> {
         try {
-            const res = await fetch(`${_apiBaseUrl}/api/commands`, {
+            const res = await fetch(apiUrl("/api/commands"), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(command)
@@ -247,3 +249,5 @@ export const CommandService = {
         }
     }
 };
+
+export * from "./runtime-config";

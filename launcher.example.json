@@ -1,0 +1,19 @@
+{
+  "exePath": "",
+  "startArgs": "",
+  "processName": "",
+  "rtcPreset": "manual",
+  "rtcHost": "",
+  "rtcApiPort": 1984,
+  "rtcWebrtcPort": 8555,
+  "rtcUseHttps": false,
+  "controlWsUrl": "",
+  "webrtcBaseUrl": "",
+  "easytierEndpoint": "",
+  "go2rtcCandidate": "127.0.0.1:8555",
+  "transportMode": "relay",
+  "videoBitrateMbps": 13,
+  "videoFps": 30,
+  "videoResolution": "1920x1080",
+  "iceServers": ""
+}
